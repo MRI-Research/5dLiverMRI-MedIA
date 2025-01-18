@@ -57,3 +57,19 @@ with h5py.File('phantom.h5', 'r') as hf:
     cf        = hf["cf"][...] # center frequency in [Hz] 
 ```
 
+To reconstruct image from Cartesian k-space:
+```matlab
+
+data = h5read('Gd_Phantom_Cartesian_WO_Motion.h5','/ksp');
+ksp = complex(data.r,data.i);
+
+myfft = @(func,x) func(func(func(x,[],1),[],2),[],3);
+myfftshift1 = @(func,x) func(func(func(x,1),2),3);
+myfftshift2 = @(func,x) func(func(x,1),2);
+
+for echo = 1 : 6
+    img(:,:,:,:,echo) = myfftshift2(@ifftshift,myfft(@ifft,myfftshift1(@fftshift,ksp(:,:,:,:,echo))));
+end
+
+```
+
