@@ -70,6 +70,5 @@ myfftshift2 = @(func,x) func(func(x,1),2);
 for echo = 1 : 6
     img(:,:,:,:,echo) = myfftshift2(@ifftshift,myfft(@ifft,myfftshift1(@fftshift,ksp(:,:,:,:,echo))));
 end
-
 ```
 
