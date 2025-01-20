@@ -4,15 +4,27 @@ Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo 
 # Code
 
 ## Recon code
-1. gridding (motion-averaged) reconstruction code
-2. respiratory motion estimation code
-3. coil sensitivity estimation code
+
+1. respiratory motion estimation code
+2. coil sensitivity estimation code
+3. gridding (motion-averaged) reconstruction code
 4. motion-resolved reconstruction code (4D/5D)
    
 ## Dependencies
 
 ## Usage
-1. Gridding (motion-averaged) reconstruction.
+
+1. Motion signal estimation.
+```bash 
+python3 recon_respiratory_signal.py --verbose 'input_dir' 'output_dir'
+```
+
+2. Coil sensitivity estimation.
+```bash 
+python3 recon_coil_sensitivity.py --device 1 --show_pbar --verbose 'input_dir' 'output_dir'
+```
+
+3. Gridding (motion-averaged) reconstruction.
 ```bash 
 python3 recon_gridding_motion_averaged.py --device 1 --verbose 'input_dir' 'output_dir'
 ```
