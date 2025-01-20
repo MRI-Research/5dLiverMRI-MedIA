@@ -54,8 +54,10 @@ python3 recon_gridding_motion_averaged.py --device 1 --verbose 'input_dir' 'outp
 The following list of h5 files can be downloaded from...
 
 1. `Gd_Phantom_Cartesian_WO_Motion.h5`
-2. `Gd_Phantom_Cones_WO_Motion.h5`
-3. `Gd_Phantom_Cones_With_Motion.h5`
+2-1. `Gd_Phantom_Cones_WO_Motion_1.h5`
+2-2. `Gd_Phantom_Cones_WO_Motion_2.h5`
+3-1. `Gd_Phantom_Cones_With_Motion_1.h5`
+3-2. `Gd_Phantom_Cones_With_Motion_2.h5`
 
 ## File I/O
 
