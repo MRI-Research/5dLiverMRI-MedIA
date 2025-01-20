@@ -4,7 +4,7 @@ Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo 
 # Code
 
 ## Recon code
-1. gridding
+1. gridding (motion-averaged) reconstruction code
 2. respiratory motion estimation code
 3. coil sensitivity estimation code
 4. motion-resolved reconstruction code (4D/5D)
