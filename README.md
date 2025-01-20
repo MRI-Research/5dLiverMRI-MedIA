@@ -16,12 +16,12 @@ Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo 
 
 1. Motion signal estimation.
 ```bash 
-python3 recon_respiratory_signal.py --verbose 'input_dir' 'output_dir'
+python3 recon_respiratory_signal.py --verbose 'input_dir' 'output_dir/resp'
 ```
 
 2. Coil sensitivity estimation.
 ```bash 
-python3 recon_coil_sensitivity.py --device 1 --show_pbar --verbose 'input_dir' 'output_dir'
+python3 recon_coil_sensitivity.py --device 1 --show_pbar --verbose 'input_dir' 'output_dir/mps'
 ```
 
 3. Gridding (motion-averaged) reconstruction.
