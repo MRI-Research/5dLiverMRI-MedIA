@@ -12,8 +12,9 @@ Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo 
 ## Dependencies
 
 ## Usage
-```bash
-python3 ...
+1. Gridding (motion-averaged) reconstruction.
+```bash 
+python3 recon_gridding_motion_averaged.py --device 1 --verbose 'input_dir' 'output_dir'
 ```
 
 # Dataset
