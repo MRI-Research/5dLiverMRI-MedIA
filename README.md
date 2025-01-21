@@ -13,11 +13,17 @@ Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo 
 ## Dependencies
 
 Python 3.9.18
+
 scipy 1.11.4
+
 cupy 8.3.0
+
 sigpy 0.1.26 (pywt.waverecn: mode = 'reflect') 
+
 numpy 1.23.1
+
 mpi4py 3.1.4
+
 pywt 1.5.0
 
 ## Usage
