@@ -61,21 +61,13 @@ python3 recon_gridding_motion_averaged.py --device 1 --verbose 'input_dir' 'outp
 (3) Uniform undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 --lambda2 8e-7 --lambda3 3e-6 --undersampling 60 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
 ```
 
-# Dataset
+# Datasets
 
-## Description 
+Gadolinium phantom MRI k-space raw datasets are available on Zenodo:
 
-The following list of h5 files can be downloaded from...
-
-1. `Gd_Phantom_Cartesian_WO_Motion.h5`
-   
-2-1. `Gd_Phantom_Cones_WO_Motion_1.h5`
-
-2-2. `Gd_Phantom_Cones_WO_Motion_2.h5`
-
-3-1. `Gd_Phantom_Cones_With_Motion_1.h5`
-
-3-2. `Gd_Phantom_Cones_With_Motion_2.h5`
+1. Cones without motion: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14707963.svg)](https://doi.org/10.5281/zenodo.14707963), [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14707967.svg)](https://doi.org/10.5281/zenodo.14707967)
+2. Cones with motion: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691117.svg)](https://doi.org/10.5281/zenodo.14691117), [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691162.svg)](https://doi.org/10.5281/zenodo.14691162)
+3. Cartesian: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691167.svg)](https://doi.org/10.5281/zenodo.14691167)
 
 ## File I/O
 
@@ -84,8 +76,8 @@ To read cones data:
 import h5py
 
 # Read the stored h5 file
-with h5py.File('phantom.h5', 'r') as hf:
-    ksp       = hf["ksp"][:]
+with h5py.File('Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
+    ksp_1     = hf["ksp"][:]
     coord     = hf["coord"][:]
     dcf       = hf["dcf"][:]
     imageDim  = hf["imageDim"][:] # matrix size
@@ -93,6 +85,19 @@ with h5py.File('phantom.h5', 'r') as hf:
     te        = hf["te"][:] # TE in [sec]
     tr        = hf["tr"][...] # TR in [sec]
     cf        = hf["cf"][...] # center frequency in [Hz] 
+
+with h5py.File('Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
+    ksp_2     = hf["ksp"][:]
+    coord     = hf["coord"][:]
+    dcf       = hf["dcf"][:]
+    imageDim  = hf["imageDim"][:] # matrix size
+    voxelSize = hf["voxelSize"][:] # spatial resolution in [cm]
+    te        = hf["te"][:] # TE in [sec]
+    tr        = hf["tr"][...] # TR in [sec]
+    cf        = hf["cf"][...] # center frequency in [Hz] 
+
+# Combine
+ksp = np.concatenate((ksp_1, ksp_2), axis=1)
 ```
 
 To read Cartesian data:
@@ -100,7 +105,7 @@ To read Cartesian data:
 import h5py
 
 # Read the stored h5 file
-with h5py.File('phantom.h5', 'r') as hf:
+with h5py.File('Gd_Phantom_Cartesian_WO_Motion.h5', 'r') as hf:
     ksp       = hf["ksp"][:]
     imageDim  = hf["imageDim"][:] # matrix size
     voxelSize = hf["voxelSize"][:] # spatial resolution in [cm]
@@ -109,7 +114,7 @@ with h5py.File('phantom.h5', 'r') as hf:
     cf        = hf["cf"][...] # center frequency in [Hz] 
 ```
 
-To reconstruct image from Cartesian k-space:
+To reconstruct image from Cartesian k-space raw data:
 ```matlab
 # Matlab
 data = h5read('Gd_Phantom_Cartesian_WO_Motion.h5','/ksp');
@@ -123,4 +128,3 @@ for echo = 1 : 6
     img(:,:,:,:,echo) = myfftshift2(@ifftshift,myfft(@ifft,myfftshift1(@fftshift,ksp(:,:,:,:,echo))));
 end
 ```
-
