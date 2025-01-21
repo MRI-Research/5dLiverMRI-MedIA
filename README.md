@@ -1,64 +1,75 @@
-# 5dLiverMRI-MedIA
-Repository for Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo Sparsity for Accelerated Free-Breathing Quantitative Liver MRI. Medical Image Analysis
+# 5D Image Reconstruction for Acceleraetd Free-Breathing Liver MRI
 
-# Code
+This repository contains the reconstruction code and datasets of the following manuscript currently under minor revision.
 
-## Recon code
+> Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo Sparsity for Accelerated Free-Breathing Quantitative Liver MRI. <em>Medical Image Analysis</em>.
 
-1. respiratory motion estimation code
-2. coil sensitivity estimation code
-3. gridding (motion-averaged) reconstruction code
-4. motion-resolved reconstruction code (4D/5D)
-   
-## Dependencies
+Contact: MungSoo Kang (<kangms0511@gmail.com>)
 
-Python 3.9.18
+# Contents
+```bash
+$ tree
+.
+├── README.md
+├── recon_4D_motion_resolved_PDHG.py               # 4D recon w/o undersampling
+├── recon_4D_motion_resolved_PDHG_undersampling.py # 4D recon w/undersampling
+├── recon_5D_motion_resolved_PDHG.py               # 5D recon w/o undersampling
+├── recon_5D_motion_resolved_PDHG_undersampling.py # 5D recon w/undersampling
+├── recon_coil_sensitivity.py                      # JSENSE for coil sensitivity estimation
+├── recon_gridding_motion_averaged.py              # motion averaged recon
+└── recon_respiratory_signal.py                    # respiratory motion estimation
 
-scipy 1.11.4
+1 directory, 8 files
+```
 
-cupy 8.3.0
+## Tested Environment
 
-sigpy 0.1.26 (pywt.waverecn: mode = 'reflect') 
+Python packages:
+```
+python=3.9.18
+scipy=1.11.4
+cupy=8.3.0
+sigpy=0.1.26 (pywt.waverecn: mode = 'reflect') 
+numpy=1.23.1
+mpi4py=3.1.4
+pywt=1.5.0
+```
+Nvidia A100 GPUs 
 
-numpy 1.23.1
+## Example Usage
 
-mpi4py 3.1.4
-
-pywt 1.5.0
-
-## Usage
-
-1. Motion signal estimation.
-```bash 
+```bash
+# 1. Motion signal estimation
 python3 recon_respiratory_signal.py --verbose 'input_dir' 'output_dir/resp'
-```
 
-2. Coil sensitivity estimation.
-```bash 
-python3 recon_coil_sensitivity.py --device 1 --show_pbar --verbose 'input_dir' 'output_dir/mps'
-```
+# 2. Coil sensitivity estimation
+python3 recon_coil_sensitivity.py --device 0 --show_pbar --verbose 'input_dir' 'output_dir/mps'
 
-3. Gridding (motion-averaged) reconstruction.
-```bash 
-python3 recon_gridding_motion_averaged.py --device 1 --verbose 'input_dir' 'output_dir'
-```
+# 3. Gridding (motion-averaged) reconstruction
+python3 recon_gridding_motion_averaged.py --device 0 --verbose 'input_dir' 'output_dir'
 
-4. 4D motion-resolved reconstruction.
-```bash
-(1) No undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_4D_motion_resolved_PDHG.py --num_bins 4 --lambda1 1e-6 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+# 4. 4D motion resolved reconstruction
+NUM_GPUS=4
+## 4.1. No undersampling
+mpiexec -n $NUM_GPUS python3 recon_4D_motion_resolved_PDHG.py --num_bins 4 --lambda1 1e-6 \
+   --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+## 4.2. with random undersampling
+mpiexec -n $NUM_GPUS python3 recon_4D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
+   --undersampling 60 --random --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+## 4.3. with uniform undersampling
+mpiexec -n $NUM_GPUS python3 recon_4D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
+   --undersampling 60 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
 
-(2) Random undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_4D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 --undersampling 60 --random --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-
-(3) Uniform undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_4D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 --undersampling 60 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-```
-
-5. 5D motion-resolved reconstruction.
-```bash
-(1) No undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_5D_motion_resolved_PDHG.py --num_bins 4 --lambda1 1e-6 --lambda2 8e-7 --lambda3 3e-6 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-
-(2) Random undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 --lambda2 8e-7 --lambda3 3e-6 --undersampling 60 --random --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-
-(3) Uniform undersampling: mpiexec -n 4 python3 /otazolab_ess/mungsoo-data/motion_resolved_recon_tools/Cones/recon/bin/recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 --lambda2 8e-7 --lambda3 3e-6 --undersampling 60 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+# 5. 5D motion resolved reconstruction
+## 4.1. No undersampling
+mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG.py --num_bins 4 --lambda1 1e-6 \
+   --lambda2 8e-7 --lambda3 3e-6 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+## 4.2. with random undersampling
+mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
+   --lambda2 8e-7 --lambda3 3e-6 --undersampling 60 --random --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
+## 4.3. with uniform undersampling
+mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
+   --lambda2 8e-7 --lambda3 3e-6 --undersampling 60 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
 ```
 
 # Datasets
