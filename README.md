@@ -114,9 +114,11 @@ with h5py.File('Gd_Phantom_Cartesian_WO_Motion.h5', 'r') as hf:
     cf        = hf["cf"][...] # center frequency in [Hz] 
 ```
 
+## Recon script for Cartesian data
+
 To reconstruct image from Cartesian k-space raw data:
 ```matlab
-# Matlab
+% MATLAB
 data = h5read('Gd_Phantom_Cartesian_WO_Motion.h5','/ksp');
 ksp = complex(data.r,data.i);
 
@@ -128,3 +130,7 @@ for echo = 1 : 6
     img(:,:,:,:,echo) = myfftshift2(@ifftshift,myfft(@ifft,myfftshift1(@fftshift,ksp(:,:,:,:,echo))));
 end
 ```
+
+## Quantitative Susceptibility Mapping (QSM)
+
+For QSM, please refer to the details of the processing steps in our paper as well as the [MEDI toolbox](https://pre.weill.cornell.edu/mri/pages/qsm.html).
