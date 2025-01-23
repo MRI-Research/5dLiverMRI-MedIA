@@ -35,7 +35,9 @@ mpi4py=3.1.4
 pywt=1.5.0
 ```
 64-bit Linux machine with:
+
 Intel Xeon Platinum 8380 2.30GHz processor
+
 4 Nvidia A100 GPUs
 
 ## Example Usage
