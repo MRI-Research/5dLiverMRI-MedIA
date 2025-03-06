@@ -65,13 +65,13 @@ mpiexec -n $NUM_GPUS python3 recon_4D_motion_resolved_PDHG_undersampling.py --nu
    --undersampling 10 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
 
 # 5. 5D motion resolved reconstruction
-## 4.1. No undersampling
+## 5.1. No undersampling
 mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG.py --num_bins 4 --lambda1 1e-6 \
    --lambda2 6e-7 --lambda3 1e-6 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-## 4.2. with random undersampling
+## 5.2. with random undersampling
 mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
    --lambda2 6e-7 --lambda3 1e-6 --undersampling 10 --random --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
-## 4.3. with uniform undersampling
+## 5.3. with uniform undersampling
 mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG_undersampling.py --num_bins 4 --lambda1 1e-6 \
    --lambda2 6e-7 --lambda3 1e-6 --undersampling 10 --multi_gpu --show_pbar --verbose 'input_dir' 'output_dir'
 ```
