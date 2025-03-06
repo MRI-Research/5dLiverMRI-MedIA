@@ -57,7 +57,7 @@ class MotionResolvedRecon(object):
         for b in range(B):
             if b < self.B-1:
                 idx = (resp >= bins[b]) & (resp < bins[b + 1])
-                self.bksp_temp.append(ksp[:, :, idx])
+                self.bksp.append(sp.to_device(ksp[:, :, idx], self.device))
                 self.bcoord.append(
                     sp.to_device(coord[idx], self.device))
                 self.bdcf.append(
@@ -66,18 +66,13 @@ class MotionResolvedRecon(object):
                     sp.to_device(dual_q[:, :, idx], self.device))
             if b == self.B -1:
                 idx = (resp >= bins[b]) & (resp <= bins[b + 1])
-                self.bksp_temp.append(ksp[:, :, idx])
+                self.bksp.append(sp.to_device(ksp[:, :, idx], self.device))
                 self.bcoord.append(
                     sp.to_device(coord[idx], self.device))
                 self.bdcf.append(
                     sp.to_device(dcf[idx], self.device))
                 self.dual_q_.append(
                     sp.to_device(dual_q[:, :, idx], self.device))
-                
-        for b in range(B):
-                self.bksp_temp[b] = self.bksp_temp[b]/np.max(np.abs(self.bksp_temp[b].ravel())) * 1000 ## k-space normalization
-                self.bksp.append(sp.to_device(self.bksp_temp[b],self.device))    
-
 
     # Primal-Dual Algorithm
     def pdinit(self, mrimg):
@@ -229,7 +224,7 @@ if __name__ == '__main__':
     if comm.rank == 0:
         logging.info('Reading data.')
 
-    with h5py.File('Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
+    with h5py.File('./Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
         ksp_1   = hf["ksp"][:]
         coord = hf["coord"][:]
         dcf  = hf["dcf"][:]
@@ -240,7 +235,7 @@ if __name__ == '__main__':
         cf    = hf["cf"][...]
     img_shape = img_shape.tolist()
     
-    with h5py.File('Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
+    with h5py.File('./Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
         ksp_2   = hf["ksp"][:]
         
     ksp = np.concatenate((ksp_1,ksp_2), axis=1)
@@ -271,6 +266,8 @@ if __name__ == '__main__':
     
     # Coil sensitivity map normalization
     if 1:
+    	ksp /= np.max(np.abs(ksp.flatten()))
+        ksp *= 1000
         mpsSOS = np.sum(abs(mps)**2, 0)**0.5
         for c in range(mps.shape[0]):
             mps[c] /= mpsSOS
