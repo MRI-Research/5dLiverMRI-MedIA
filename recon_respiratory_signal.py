@@ -32,11 +32,11 @@ if __name__ == '__main__':
         logging.basicConfig(level=logging.DEBUG)
     
     logging.info('Reading data.')
-    with h5py.File('Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
+    with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
         ksp_1   = hf["ksp"][:]
         tr    = hf["tr"][...]
     tr = float(tr)
-    with h5py.File('Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
+    with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
         ksp_2   = hf["ksp"][:]
         
     ksp = np.concatenate((ksp_1,ksp_2), axis=1)
