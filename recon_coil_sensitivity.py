@@ -89,8 +89,7 @@ if __name__ == '__main__':
         ksp = ksp[0]  # first echo only
 
     # Split between MPI nodes
-    if comm.rank == 0:
-        ksp = np.array_split(ksp, comm.size)[comm.rank]
+    ksp = np.array_split(ksp, comm.size)[comm.rank]
 
     # JSENSE
     mps = mr.app.JsenseRecon(ksp, coord=coord, weights=dcf,

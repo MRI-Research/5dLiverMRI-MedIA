@@ -69,9 +69,12 @@ if __name__ == '__main__':
         u, s, vh = np.linalg.svd(resp_e, full_matrices=False)
         resp = np.empty([num_tr, 1], dtype=np.float32)
         resp[:,0] = s[0] * vh[0]
+    else:
+        resp = resp_e[0, :, None]
     
     logging.info('Normalization.')
-    resp = (resp - resp.min(axis=0)) / (resp.max(axis=0) - resp.min(axis=0))
+    resp_range = resp.max(axis=0) - resp.min(axis=0)
+    resp = (resp - resp.min(axis=0)) / np.where(resp_range == 0, 1, resp_range)
 
     logging.info('Writing.')
     img_file = os.path.join(args.input_dir, args.img_file)
