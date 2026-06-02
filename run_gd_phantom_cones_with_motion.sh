@@ -5,7 +5,7 @@ set -euo pipefail
 
 REPO_DIR=${REPO_DIR:-/gpfs/projects/KeeGroup/lzhou/5dLiverMRI-MedIA}
 INPUT_DIR=${INPUT_DIR:-/gpfs/projects/KeeGroup/lzhou/datasets/Gd_Phantom/Gd_Phantom_Cones_With_Motion}
-OUTPUT_DIR=${OUTPUT_DIR:-/gpfs/projects/KeeGroup/lzhou/5dLiverMRI-MedIA/output/Gd_Phantom/Gd_Phantom_Cones_With_Motion}
+OUTPUT_DIR=${OUTPUT_DIR:-/gpfs/projects/KeeGroup/lzhou/5dLiverMRI-MedIA/output/Gd_Phantom/Gd_Phantom_Cones_With_Motion/after}
 CONDA_SH=${CONDA_SH:-/gpfs/projects/KeeGroup/lzhou/miniconda3/etc/profile.d/conda.sh}
 CONDA_ENV=${CONDA_ENV:-cones-init}
 CFL_DIR=${CFL_DIR:-/gpfs/projects/KeeGroup/lzhou/Cones/recon/bin}
@@ -22,9 +22,9 @@ RUN_RESP=${RUN_RESP:-0}
 RUN_MPS=${RUN_MPS:-0}
 RUN_GRIDDING=${RUN_GRIDDING:-0}
 RUN_4D=${RUN_4D:-1}
-RUN_5D=${RUN_5D:-1}
-RUN_4D_US=${RUN_4D_US:-1}
-RUN_5D_US=${RUN_5D_US:-1}
+RUN_5D=${RUN_5D:-0}
+RUN_4D_US=${RUN_4D_US:-0}
+RUN_5D_US=${RUN_5D_US:-0}
 
 export PYTHONPATH="${CFL_DIR}:${PYTHONPATH:-}"
 
