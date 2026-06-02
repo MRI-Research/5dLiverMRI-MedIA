@@ -15,6 +15,10 @@ import logging
 import os
 import cfl
 import numpy as np
+
+if not hasattr(np, 'compat'):
+    np.compat = type('compat', (), {'integer_types': (int, np.integer)})
+
 import sigpy as sp
 from tqdm.auto import tqdm
 import time
