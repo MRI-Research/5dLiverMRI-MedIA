@@ -4,7 +4,10 @@ This repository contains the reconstruction code and datasets of the following p
 
 > Kang et al. 5D Image Reconstruction Exploiting Space-Motion-Echo Sparsity for Accelerated Free-Breathing Quantitative Liver MRI. <em>Medical Image Analysis</em>. [https://doi.org/10.1016/j.media.2025.103532]
 
-Contact: MungSoo Kang (<kangms0511@gmail.com>)
+Contributors
+- Li Zhou (<Li.Zhou.1@stonybrook.edu>)
+- Chao Zhang (<Chao.Zhang.1@stonybrook.edu>)
+- MungSoo Kang (<kangms0511@gmail.com>)
 
 # Contents
 ```bash
