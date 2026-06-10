@@ -15,14 +15,71 @@ import logging
 import os
 import cfl
 import numpy as np
+
+if not hasattr(np, 'compat'):
+    np.compat = type('compat', (), {'integer_types': (int, np.integer)})
+
 import sigpy as sp
-import cupy as cp
-import math
-import pywt
 from tqdm.auto import tqdm
-from array import array
 import time
 import h5py
+
+
+def read_local_kspace(input_dir, comm):
+    file1 = os.path.join(input_dir, 'Gd_Phantom_Cones_With_Motion_1.h5')
+    file2 = os.path.join(input_dir, 'Gd_Phantom_Cones_With_Motion_2.h5')
+
+    with h5py.File(file1, 'r') as hf:
+        c1 = hf['ksp'].shape[1]
+        coord = hf['coord'][:]
+        dcf = hf['dcf'][:]
+        img_shape = hf['imageDim'][:]
+        voxelSize = hf['voxelSize'][:]
+        te = hf['te'][:]
+        tr = hf['tr'][...]
+        cf = hf['cf'][...]
+
+    with h5py.File(file2, 'r') as hf:
+        c2 = hf['ksp'].shape[1]
+
+    local_coils = np.array_split(np.arange(c1 + c2), comm.size)[comm.rank]
+    idx1 = local_coils[local_coils < c1]
+    idx2 = local_coils[local_coils >= c1] - c1
+
+    with h5py.File(file1, 'r') as hf:
+        ksp_1 = read_coils(hf['ksp'], idx1)
+
+    with h5py.File(file2, 'r') as hf:
+        ksp_2 = read_coils(hf['ksp'], idx2)
+
+    ksp = np.concatenate((ksp_1, ksp_2), axis=1)
+    return ksp, coord, dcf, img_shape.tolist(), voxelSize, te, tr, cf, c1 + c2
+
+
+def read_coils(dataset, coil_idx):
+    if len(coil_idx) == 0:
+        return np.empty((dataset.shape[0], 0, dataset.shape[2], dataset.shape[3]), dtype=dataset.dtype)
+
+    if np.all(np.diff(coil_idx) == 1):
+        return dataset[:, slice(int(coil_idx[0]), int(coil_idx[-1]) + 1), :, :]
+
+    return dataset[:, coil_idx, :, :]
+
+
+def max_abs_in_coil_blocks(ksp, block_size=4):
+    scale = 0.0
+    for start in range(0, ksp.shape[1], block_size):
+        stop = min(start + block_size, ksp.shape[1])
+        scale = max(scale, float(np.max(np.abs(ksp[:, start:stop]))))
+    return scale
+
+
+def global_max(comm, value):
+    if getattr(comm, 'size', 1) > 1 and hasattr(comm, 'mpi_comm'):
+        from mpi4py import MPI
+        return comm.mpi_comm.allreduce(value, op=MPI.MAX)
+    return value
+
 
 class MotionResolvedRecon(object):
     def __init__(self, ksp, coord, dcf, mps, resp, dual_q, B,
@@ -41,6 +98,8 @@ class MotionResolvedRecon(object):
         self.max_iter = max_iter
         self.tol = tol
         self.comm = comm
+        self.time_file = kwargs.get('time_file')
+        self.show_pbar = show_pbar
 
         if comm is not None:
             self.show_pbar = show_pbar and comm.rank == 0
@@ -88,24 +147,20 @@ class MotionResolvedRecon(object):
         # q: dual variable for data term
         # u: primal variable
 
-        primal_u_old = primal_u_tmp
+        primal_u_old[...] = primal_u_tmp
 
         ### @Dual variable p ###
         ###
         # 1) update p
         # p^k+1 = prox_P (p^k + sigma * \partial_t u^k)
-        diff = self.xp.zeros_like(dual_p_m)
         for b in range(self.B):
             if b < self.B - 1:
-                diff[b] = primal_u[b + 1] - primal_u[b]
-            if b == self.B - 1:
-                diff[b] = 0
+                dual_p_m[b] += self.sigma * (primal_u[b + 1] - primal_u[b])
         
         # proximal operator
-        dual_p_m = dual_p_m + self.sigma * diff
-
-        absp = self.xp.abs(dual_p_m)
-        dual_p_m = dual_p_m/self.xp.maximum(1, absp/self.lambda1)
+        for b in range(self.B):
+            absp = self.xp.abs(dual_p_m[b])
+            dual_p_m[b] /= self.xp.maximum(1, absp / self.lambda1)
 
         ### @Dual Variable q ###
         ###
@@ -120,7 +175,9 @@ class MotionResolvedRecon(object):
                     tmp[e, c] = sp.nufft(primal_u[b, e] * mps_c, self.bcoord[b]) - self.bksp[b][e][c]
 
             # proximal operator
-            dual_q[b] = (dual_q[b] + self.sigma * tmp)/(1 + self.sigma)
+            tmp *= self.sigma
+            dual_q[b] += tmp
+            dual_q[b] /= 1 + self.sigma
 
         ### @PRIMAL VARIABLE ###
         ##
@@ -148,10 +205,14 @@ class MotionResolvedRecon(object):
         if self.comm is not None:
             self.comm.allreduce(tmp)
 
-        sp.axpy(primal_u_tmp, -self.tau, tmp - divp)
+        tmp -= divp
+        tmp *= -self.tau
+        primal_u_tmp += tmp
 
         ### @AUXILIARY UPDATE ###
-        primal_u = 2*primal_u_tmp - primal_u_old
+        primal_u[...] = primal_u_tmp
+        primal_u *= 2
+        primal_u -= primal_u_old
 
         return primal_u, primal_u_old, primal_u_tmp, dual_p_m, dual_q
 
@@ -170,11 +231,15 @@ class MotionResolvedRecon(object):
                     start_time = time.monotonic()  
 
                     for it in range(self.max_iter):
-                        mrimg_od = mrimg
                         mrimg, primal_u_old, primal_u_tmp, dual_p_m, dual_q = \
                             self.pdhg(mrimg, primal_u_old, primal_u_tmp, dual_p_m, dual_q, it)
 
-                        _tol = self.xp.linalg.norm(abs(mrimg_od - mrimg))/self.xp.linalg.norm(abs(mrimg_od))
+                        denom = self.xp.linalg.norm(abs(primal_u_old))
+                        if denom == 0:
+                            denom = self.xp.linalg.norm(abs(primal_u_tmp))
+                        if denom == 0:
+                            denom = 1
+                        _tol = self.xp.linalg.norm(abs(primal_u_tmp - primal_u_old))/denom
                         pbar.set_postfix(tol=_tol)
 
                         if (_tol < self.tol):
@@ -184,8 +249,8 @@ class MotionResolvedRecon(object):
 
         end_time = time.monotonic()
         total_time = end_time - start_time
-        time_file = os.path.join(args.input_dir, args.img_file)
-        np.savetxt(time_file+'_total_time.txt',np.repeat(total_time,2),fmt='%4.4f')
+        if self.time_file is not None:
+            np.savetxt(self.time_file+'_total_time.txt',np.repeat(total_time,2),fmt='%4.4f')
         return mrimg
 
 if __name__ == '__main__':
@@ -208,7 +273,7 @@ if __name__ == '__main__':
 
     # Verbose
     if args.verbose:
-	    logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG)
     
     # Choose device
     comm = sp.Communicator()
@@ -224,26 +289,8 @@ if __name__ == '__main__':
     if comm.rank == 0:
         logging.info('Reading data.')
 
-    with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
-        ksp_1   = hf["ksp"][:]
-        coord = hf["coord"][:]
-        dcf  = hf["dcf"][:]
-        img_shape = hf["imageDim"][:]
-        voxelSize = hf["voxelSize"][:]
-        te    = hf["te"][:]
-        tr    = hf["tr"][...]
-        cf    = hf["cf"][...]
-    img_shape = img_shape.tolist()
-    
-    with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
-        ksp_2   = hf["ksp"][:]
-        
-    ksp = np.concatenate((ksp_1,ksp_2), axis=1)
-    
-    del ksp_1
-    del ksp_2
-    
-    num_echoes, num_coils, _, _,  = ksp.shape[-4:]  # Extract dims
+    ksp, coord, dcf, img_shape, voxelSize, te, tr, cf, total_coils = read_local_kspace(args.input_dir, comm)
+    num_echoes, local_coils, _, _, = ksp.shape[-4:]  # Extract dims
 
     if comm.rank == 0:
         logging.info('Scaling coordinates.')
@@ -266,29 +313,26 @@ if __name__ == '__main__':
     
     # Coil sensitivity map normalization
     if 1:
-    	ksp /= np.max(np.abs(ksp.flatten()))
+        ksp /= global_max(comm, max_abs_in_coil_blocks(ksp))
         ksp *= 1000
         mpsSOS = np.sum(abs(mps)**2, 0)**0.5
         for c in range(mps.shape[0]):
             mps[c] /= mpsSOS
 
     # Split between MPI nodes: make sure we split COILS of ksp and mps
-    dual_q = np.zeros((ksp.shape[0], ksp.shape[1], ksp.shape[2], ksp.shape[3]), dtype=np.complex64)
-    dual_q = np.array_split(np.transpose(dual_q, (1, 0, 2, 3)), comm.size)[comm.rank]
-    dual_q = np.transpose(dual_q, (1, 0, 2, 3))
-    
-    ksp = np.array_split(np.transpose(ksp, (1, 0, 2, 3)), comm.size)[comm.rank] # coil, echo, readout
+    dual_q = np.zeros(ksp.shape, dtype=np.complex64)
     mps = np.array_split(mps, comm.size)[comm.rank]
-    ksp = np.transpose(ksp, (1, 0, 2, 3)) # echo, coil, readout
 
     img = np.empty([args.num_bins, 1, 1, num_echoes, 1, 1] + img_shape, dtype=np.complex64)
     
     if comm.rank == 0:
         logging.info('Running motion-resolved reconstruction (PDHG): #echos={E}, #coils={C}, #bins={B}'.format(
-            E=num_echoes, C=num_coils, B=args.num_bins)) 
+            E=num_echoes, C=total_coils, B=args.num_bins))
 
     mrimg = MotionResolvedRecon(ksp, coord, dcf, mps, resp, dual_q, args.num_bins,
-                            max_iter=9999, lambda1=args.lambda1, sigma=0.1, tau=0.1, tol=0.01, device=device, margin=2, comm=comm).run()
+                            max_iter=args.max_iter, lambda1=args.lambda1, sigma=0.1, tau=0.1, tol=0.01, device=device, margin=2, comm=comm,
+                            show_pbar=args.show_pbar,
+                            time_file=os.path.join(args.input_dir, args.img_file)).run()
     
     with device:
         img[:, 0, 0, :, 0, 0, :, :, :] = sp.to_device(mrimg)

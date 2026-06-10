@@ -15,14 +15,45 @@ import logging
 import os
 import cfl
 import numpy as np
+
+if not hasattr(np, 'compat'):
+    np.compat = type('compat', (), {'integer_types': (int, np.integer)})
+
 import sigpy as sp
-import cupy as cp
 import math
-import pywt
 from tqdm.auto import tqdm
-from array import array
 import time
 import h5py
+from cupy_wavelet import CupyWavelet, soft_threshold
+
+
+def get_tr_selection(n_tr, undersampling, random=False):
+    if undersampling <= 1:
+        return slice(None)
+
+    num_tr = max(1, int(np.floor(n_tr / undersampling)))
+    if random:
+        rng = np.random.default_rng(0)
+        return np.sort(rng.choice(n_tr, size=num_tr, replace=False))
+
+    if float(undersampling).is_integer():
+        return slice(None, None, int(undersampling))
+
+    return np.unique(np.round(np.linspace(0, n_tr - 1, num=num_tr)).astype(int))
+
+
+def max_abs_in_coil_blocks(ksp, block_size=4):
+    scale = 0.0
+    for start in range(0, ksp.shape[1], block_size):
+        stop = min(start + block_size, ksp.shape[1])
+        scale = max(scale, float(np.max(np.abs(ksp[:, start:stop]))))
+    return scale
+
+
+def free_unused_memory(xp):
+    if hasattr(xp, 'get_default_memory_pool'):
+        xp.get_default_memory_pool().free_all_blocks()
+
 
 class MotionResolvedRecon(object):
     def __init__(self, ksp, coord, dcf, mps, resp, dual_q, B, random=True,
@@ -45,6 +76,8 @@ class MotionResolvedRecon(object):
         self.tol = tol
         self.comm = comm
         self.undersampling = undersampling
+        self.time_file = kwargs.get('time_file')
+        self.show_pbar = show_pbar
         
         if comm is not None:
             self.show_pbar = show_pbar and comm.rank == 0
@@ -487,59 +520,48 @@ class MotionResolvedRecon(object):
         # q: dual variable for data term
         # u: primal variable
         
-        primal_u_old = primal_u_tmp
+        primal_u_old[...] = primal_u_tmp
 
         ### @Dual variable p ###
         ###
         # 1) update p
         # p^k+1 = prox_P (p^k + sigma * \partial_t u^k)
-        diff = self.xp.zeros_like(dual_p_m)
         for b in range(self.B):
             if b < self.B - 1:
-                diff[b] = primal_u[b + 1] - primal_u[b]
-            if b == self.B - 1:
-                diff[b] = 0
-      
+                dual_p_m[b] += self.sigma * (primal_u[b + 1] - primal_u[b])
+	      
         # proximal operator
-        dual_p_m = dual_p_m + self.sigma * diff
-
-        absp = self.xp.abs(dual_p_m)
-        dual_p_m = dual_p_m/self.xp.maximum(1, absp/self.lambda1)
+        for b in range(self.B):
+            absp = self.xp.abs(dual_p_m[b])
+            dual_p_m[b] /= self.xp.maximum(1, absp / self.lambda1)
             
         X1 = [0]
         X2 = [1,2,3]
         temp_range1 = tuple(X1)
         temp_range2 = tuple(X2)
-        W1 = sp.linop.Wavelet(primal_u[0].shape, wave_name='db1', axes=temp_range1)
-        W2 = sp.linop.Wavelet(primal_u[0].shape, wave_name='db6', axes=temp_range2)
+        W1 = CupyWavelet(primal_u[0].shape, wave_name='db1', axes=temp_range1, xp=self.xp)
+        W2 = CupyWavelet(primal_u[0].shape, wave_name='db6', axes=temp_range2, xp=self.xp)
         
         if it == 0:
-            wav1_shape = []
-            wav1_temp = W1 * primal_u[0]
-            wav1_shape = self.xp.zeros([self.B] + list(wav1_temp.shape),dtype=wav1_temp.dtype)
-            dual_p_w1 = self.xp.zeros_like(wav1_shape)
-            
-            wav2_shape = []
-            wav2_temp = W2 * primal_u[0]
-            wav2_shape = self.xp.zeros([self.B] + list(wav2_temp.shape),dtype=wav2_temp.dtype)
-            dual_p_w2 = self.xp.zeros_like(wav2_shape) 
-
-        wav1 = self.xp.zeros_like(dual_p_w1)
-        wav2 = self.xp.zeros_like(dual_p_w2)
+            dual_p_w1 = self.xp.zeros([self.B] + list(W1.oshape), dtype=primal_u.dtype)
+            dual_p_w2 = self.xp.zeros([self.B] + list(W2.oshape), dtype=primal_u.dtype)
+            free_unused_memory(self.xp)
         
         
         for b in range(self.B):
-            wav1[b] = W1 * primal_u[b]
-            dual_p_w1[b] = dual_p_w1[b] + self.sigma * wav1[b]       
+            wav1 = W1 * primal_u[b]
+            wav1 *= self.sigma
+            dual_p_w1[b] += wav1
 
-            wav2[b]  = W2 * primal_u[b]
-            dual_p_w2[b] = dual_p_w2[b] + self.sigma * wav2[b]  
+            wav2 = W2 * primal_u[b]
+            wav2 *= self.sigma
+            dual_p_w2[b] += wav2
 
         
         for b in range(self.B):
 
-            dual_p_w1[b] = dual_p_w1[b] - pywt.threshold(dual_p_w1[b], self.lambda2, 'soft')
-            dual_p_w2[b] = dual_p_w2[b] - pywt.threshold(dual_p_w2[b], self.lambda3, 'soft')
+            dual_p_w1[b] = dual_p_w1[b] - soft_threshold(dual_p_w1[b], self.lambda2, self.xp)
+            dual_p_w2[b] = dual_p_w2[b] - soft_threshold(dual_p_w2[b], self.lambda3, self.xp)
 
         ### @Dual Variable q ###
         ###
@@ -555,7 +577,9 @@ class MotionResolvedRecon(object):
                     tmp[e, c] = sp.nufft(primal_u[b, e] * mps_c, self.bcoord[b][e]) - self.bksp[b][e][c] 
                     
             # proximal operator
-            dual_q[b] = (dual_q[b] + self.sigma * tmp)/(1 + self.sigma)
+            tmp *= self.sigma
+            dual_q[b] += tmp
+            dual_q[b] /= 1 + self.sigma
         
         ### @PRIMAL VARIABLE ###
         ##
@@ -593,10 +617,16 @@ class MotionResolvedRecon(object):
             self.comm.allreduce(tmp)
  
         
-        sp.axpy(primal_u_tmp, -self.tau, tmp  - divp_m  + divp_w1 + divp_w2)
+        tmp -= divp_m
+        tmp += divp_w1
+        tmp += divp_w2
+        tmp *= -self.tau
+        primal_u_tmp += tmp
 
         ### @AUXILIARY UPDATE ###
-        primal_u = 2*primal_u_tmp - primal_u_old
+        primal_u[...] = primal_u_tmp
+        primal_u *= 2
+        primal_u -= primal_u_old
         
         return primal_u, primal_u_old, primal_u_tmp, dual_p_m, dual_p_w1, dual_p_w2, dual_q
 
@@ -618,10 +648,14 @@ class MotionResolvedRecon(object):
                     tolerance = np.zeros(self.max_iter)
                     for it in range(self.max_iter):
 
-                        mrimg_od = mrimg
                         mrimg, primal_u_old, primal_u_tmp, dual_p_m, dual_p_w1, dual_p_w2, dual_q = \
                         self.pdhg(mrimg, primal_u_old, primal_u_tmp, dual_p_m, dual_p_w1, dual_p_w2, dual_q, it)
-                        _tol = self.xp.linalg.norm(abs(mrimg_od - mrimg))/self.xp.linalg.norm(abs(mrimg_od))
+                        denom = self.xp.linalg.norm(abs(primal_u_old))
+                        if denom == 0:
+                            denom = self.xp.linalg.norm(abs(primal_u_tmp))
+                        if denom == 0:
+                            denom = 1
+                        _tol = self.xp.linalg.norm(abs(primal_u_tmp - primal_u_old))/denom
                         pbar.set_postfix(tol=_tol)
                         tolerance[it] = _tol
 
@@ -631,8 +665,8 @@ class MotionResolvedRecon(object):
                     done = True
         end_time = time.monotonic()
         total_time = end_time - start_time
-        time_file = os.path.join(args.input_dir, args.img_file)
-        np.savetxt(time_file+'_total_time.txt',np.repeat(total_time,2),fmt='%4.4f')
+        if self.time_file is not None:
+            np.savetxt(self.time_file+'_total_time.txt',np.repeat(total_time,2),fmt='%4.4f')
         return mrimg
 
 
@@ -663,7 +697,7 @@ if __name__ == '__main__':
 
     # Verbose
     if args.verbose:
-	    logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG)
     
     # Choose device
     comm = sp.Communicator()
@@ -679,10 +713,19 @@ if __name__ == '__main__':
     if comm.rank == 0:
         logging.info('Reading data.')
 
+    if comm.rank == 0:
+        logging.info('Reading resp signal.')
+
+    resp_file = os.path.join(args.input_dir, 'resp')
+    resp_all = np.squeeze(cfl.read_cfl(resp_file)).real
+
     with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_1.h5', 'r') as hf:
-        ksp_1   = hf["ksp"][:]
-        coord = hf["coord"][:]
-        dcf  = hf["dcf"][:]
+        tr_selection = get_tr_selection(hf["ksp"].shape[2], args.undersampling, args.random)
+        if comm.rank == 0:
+            logging.info('Applying input TR undersampling: factor={}'.format(args.undersampling))
+        ksp_1 = hf["ksp"][:, :, tr_selection, :]
+        coord = hf["coord"][tr_selection]
+        dcf = hf["dcf"][tr_selection]
         img_shape = hf["imageDim"][:]
         voxelSize = hf["voxelSize"][:]
         te    = hf["te"][:]
@@ -691,7 +734,7 @@ if __name__ == '__main__':
     img_shape = img_shape.tolist()
 
     with h5py.File(args.input_dir + '/Gd_Phantom_Cones_With_Motion_2.h5', 'r') as hf:
-        ksp_2   = hf["ksp"][:]
+        ksp_2 = hf["ksp"][:, :, tr_selection, :]
         
     ksp = np.concatenate((ksp_1,ksp_2), axis=1)
     del ksp_1
@@ -712,15 +755,11 @@ if __name__ == '__main__':
     mps_file = os.path.join(args.input_dir, 'mps')
     mps      = np.squeeze(cfl.read_cfl(mps_file))
     
-    if comm.rank == 0:
-        logging.info('Reading resp signal.')
-    
-    resp_file = os.path.join(args.input_dir, 'resp')
-    resp      = np.squeeze(cfl.read_cfl(resp_file)).real
+    resp = resp_all[tr_selection]
     
     # Coil sensitivity map normalization
     if 1:
-	ksp /= np.max(np.abs(ksp.flatten()))
+        ksp /= max_abs_in_coil_blocks(ksp)
         ksp *= 1000
         mpsSOS = np.sum(abs(mps)**2, 0)**0.5
         for c in range(mps.shape[0]):
@@ -742,8 +781,10 @@ if __name__ == '__main__':
         logging.info('Running motion-resolved reconstruction (PDHG): #echos={E}, #coils={C}, #bins={B}'.format(
             E=num_echoes, C=num_coils, B=args.num_bins))
 
-    mrimg = MotionResolvedRecon(ksp, coord, dcf, mps, resp, dual_q, args.num_bins, args.random,
-                            max_iter=9999, lambda1=args.lambda1, lambda2=args.lambda2, lambda3=args.lambda3, undersampling=args.undersampling, sigma=0.1, tau=0.1, tol=0.01, device=device, margin=2, comm=comm).run()
+    mrimg = MotionResolvedRecon(ksp, coord, dcf, mps, resp, dual_q, args.num_bins, False,
+                            max_iter=args.max_iter, lambda1=args.lambda1, lambda2=args.lambda2, lambda3=args.lambda3, undersampling=1, sigma=0.1, tau=0.1, tol=0.01, device=device, margin=2, comm=comm,
+                            show_pbar=args.show_pbar,
+                            time_file=os.path.join(args.input_dir, args.img_file)).run()
     
     with device:
         img[:, 0, 0, :, 0, 0, :, :, :] = sp.to_device(mrimg)
