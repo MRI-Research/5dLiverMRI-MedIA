@@ -83,9 +83,11 @@ mpiexec -n $NUM_GPUS python3 recon_5D_motion_resolved_PDHG_undersampling.py --nu
 
 Gadolinium phantom MRI k-space raw datasets are available on Zenodo:
 
-1. Cones without motion: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14707963.svg)](https://doi.org/10.5281/zenodo.14707963), [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14707967.svg)](https://doi.org/10.5281/zenodo.14707967)
-2. Cones with motion: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691117.svg)](https://doi.org/10.5281/zenodo.14691117), [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691162.svg)](https://doi.org/10.5281/zenodo.14691162)
-3. Cartesian: [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14691167.svg)](https://doi.org/10.5281/zenodo.14691167)
+1. **Cones without motion:** [![DOI: 10.5281/zenodo.14707963](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.14707963-blue.svg)](https://doi.org/10.5281/zenodo.14707963) [![DOI: 10.5281/zenodo.14707967](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.14707967-blue.svg)](https://doi.org/10.5281/zenodo.14707967)
+
+2. **Cones with motion:** [![DOI: 10.5281/zenodo.14691117](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.14691117-blue.svg)](https://doi.org/10.5281/zenodo.14691117) [![DOI: 10.5281/zenodo.14691162](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.14691162-blue.svg)](https://doi.org/10.5281/zenodo.14691162)
+
+3. **Cartesian:** [![DOI: 10.5281/zenodo.14691167](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.14691167-blue.svg)](https://doi.org/10.5281/zenodo.14691167)
 
 ## File I/O
 
